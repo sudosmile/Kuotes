@@ -4,10 +4,47 @@ use serde_json;
 use structopt::StructOpt;
 use std::{path::PathBuf, error::Error};
 
+async fn get_kuote(client: &reqwest::Client) -> Result<String, Box<dyn Error>> {
+    let response = client
+        .get("https://api.kanye.rest/")
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    let json_kuote = response.get("quote");
+    serde_json::to_string(&json_kuote).map_err(|e| e.into())
+}
+
+async fn kuotes(n: i32, remove_quotes: bool) -> Result<String, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+
+    // get the necessary number of kuotes from the api, using an async function
+    let mut kuotes: Vec<String> = Vec::new();
+    for _ in 0..n {
+        match get_kuote(&client).await {
+            Ok(s) => kuotes.push(
+                if remove_quotes {
+                    let mut str = s;
+                    // remove quotes, which are the first and last character
+                    str.remove(0);
+                    str.pop();
+                    str
+                } else {
+                    s
+                }
+            ),
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(kuotes.join("\n"))
+}
+
 #[derive(StructOpt)]
 #[structopt(name = "kuotes", about = "Get random Kanye West quotes (aka \'kuotes\')")]
 struct Opt {
-    /// Clear screen before printing anything
+    /// Clear screen before printing anything (only on stdout)
     #[structopt(
         short = "c", 
         long = "clear",
@@ -34,44 +71,11 @@ struct Opt {
     output: Option<PathBuf>,
 }
 
-async fn get_kuote(client: &reqwest::Client) -> Result<String, Box<dyn Error>> {
-    let response = client
-        .get("https://api.kanye.rest/")
-        .send()
-        .await?
-        .json::<serde_json::Value>()
-        .await?;
-
-    let json_kuote = response.get("quote");
-    serde_json::to_string(&json_kuote).map_err(|e| e.into())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Opt::from_args();
-    let client = reqwest::Client::new();
 
-    // get the necessary number of kuotes from the api, using an async function
-    let mut kuotes: Vec<String> = Vec::new();
-    for _ in 0..args.number {
-        match get_kuote(&client).await {
-            Ok(s) => kuotes.push(
-                if args.quotes {
-                    let mut str = s;
-                    // remove quotes, which are the first and last character
-                    str.remove(0);
-                    str.pop();
-                    str
-                } else {
-                    s
-                }
-            ),
-            Err(e) => return Err(e),
-        }
-    }
-
-    // join the kuotes into a single string
-    let kuotes = kuotes.join("\n");
+    let kuotes = kuotes(args.number, args.quotes).await?;
 
     // print the kuotes to path or stdout if no output file given
     if let Some(path) = args.output {
