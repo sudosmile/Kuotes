@@ -1,10 +1,11 @@
+use serde_json;
 /// get kanye quotes from https://api.kanye.rest/
 
 use structopt::StructOpt;
 use std::{path::PathBuf, error::Error};
 
 #[derive(StructOpt)]
-#[structopt(name = "kotes", about = "Get random kanye quotes (aka \'Kotes\')")]
+#[structopt(name = "kuotes", about = "Get random Kanye West quotes (aka \'kuotes\')")]
 struct Opt {
     /// Clear screen before printing anything
     #[structopt(
@@ -13,7 +14,14 @@ struct Opt {
     )]
     clear: bool,
 
-    /// Number of Kotes to get
+    /// disable double quotes around the kuote(s)
+    #[structopt(
+        short = "q", 
+        long = "quotes",
+    )]
+    quotes: bool,
+
+    /// Number of kuotes to get (1 by default)
     #[structopt(
         short = "n", 
         long = "count",
@@ -25,7 +33,7 @@ struct Opt {
     output: Option<PathBuf>,
 }
 
-async fn get_kote(client: &reqwest::Client) -> Result<String, Box<dyn Error>> {
+async fn get_kuote(client: &reqwest::Client) -> Result<String, Box<dyn Error>> {
     let response = client
         .get("https://api.kanye.rest/")
         .send()
@@ -33,8 +41,8 @@ async fn get_kote(client: &reqwest::Client) -> Result<String, Box<dyn Error>> {
         .json::<serde_json::Value>()
         .await?;
 
-    serde_json::to_string(response.get("quote").unwrap())
-        .map_err(|e| e.into())
+    let json_kuote = response.get("quote");
+    serde_json::to_string(&json_kuote).map_err(|e| e.into())
 }
 
 #[tokio::main]
@@ -42,32 +50,43 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Opt::from_args();
     let client = reqwest::Client::new();
 
-    if args.clear {
-        clearscreen::clear()?;
-    }
-
     let n = match args.number {
         Some(n) => n,
         None => 1,
     };
 
-    // get the necessary number of Kotes from the api, using an async function
-    let mut kotes: Vec<String> = Vec::new();
+    // get the necessary number of kuotes from the api, using an async function
+    let mut kuotes: Vec<String> = Vec::new();
     for _ in 0..n {
-        match get_kote(&client).await {
-            Ok(s) => kotes.push(s),
+        match get_kuote(&client).await {
+            Ok(s) => kuotes.push(
+                if args.quotes {
+                    let mut str = s;
+                    // remove quotes, which are the first and last character
+                    str.remove(0);
+                    str.pop();
+                    str
+                } else {
+                    s
+                }
+            ),
             Err(e) => return Err(e),
         }
     }
-    let kotes = kotes.join("\n");
 
-    // print the kotes to path or stdout if no output file given
+    // join the kuotes into a single string
+    let kuotes = kuotes.join("\n");
+
+    // print the kuotes to path or stdout if no output file given
     if let Some(path) = args.output {
-        if let Err(e) = std::fs::write(&path, kotes) {
+        if let Err(e) = std::fs::write(&path, kuotes) {
             return Err(e.into())
         }
     } else {
-        println!("{kotes}");
+        if args.clear {
+            clearscreen::clear()?;
+        }
+        println!("{kuotes}");
     }
     Ok(())
 }
