@@ -21,12 +21,13 @@ struct Opt {
     )]
     quotes: bool,
 
-    /// Number of kuotes to get (1 by default)
+    /// Number of kuotes to get
     #[structopt(
         short = "n", 
         long = "count",
+        default_value = "1",
     )]
-    number: Option<i32>,
+    number: i32,
 
     /// Output file, stdout if not present
     #[structopt(parse(from_os_str))]
@@ -50,14 +51,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Opt::from_args();
     let client = reqwest::Client::new();
 
-    let n = match args.number {
-        Some(n) => n,
-        None => 1,
-    };
-
     // get the necessary number of kuotes from the api, using an async function
     let mut kuotes: Vec<String> = Vec::new();
-    for _ in 0..n {
+    for _ in 0..args.number {
         match get_kuote(&client).await {
             Ok(s) => kuotes.push(
                 if args.quotes {
